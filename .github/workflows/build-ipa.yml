@@ -24,33 +24,108 @@ jobs:
   build-tweak:
     name: Build KettuTweak (.deb)
     runs-on: macos-15
+
     defaults:
       run:
         working-directory: ./KettuTweak
 
     steps:
+      # ============================================================
+      # CHECKOUT
+      # ============================================================
+
       - name: Checkout monorepo
         uses: actions/checkout@v4
 
+      # ============================================================
+      # THEOS CACHE
+      # ============================================================
+
+      # v2 force un nouveau cache pour éviter de réutiliser
+      # le Theos contenant le Logos problématique.
       - name: Cache Theos
         id: cache-theos
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/theos
-          key: ${{ runner.os }}-theos-${{ hashFiles('KettuTweak/Makefile') }}
+          key: ${{ runner.os }}-theos-v2-${{ hashFiles('KettuTweak/Makefile') }}
+
+      # ============================================================
+      # SETUP THEOS
+      # ============================================================
 
       - name: Setup Theos
         if: steps.cache-theos.outputs.cache-hit != 'true'
         uses: Randomblock1/theos-action@v1
 
+      # ============================================================
+      # GNU MAKE
+      # ============================================================
+
       - name: Set GNU Make path
-        run: echo "PATH=$(brew --prefix make)/libexec/gnubin:$PATH" >> $GITHUB_ENV
+        run: |
+          echo "PATH=$(brew --prefix make)/libexec/gnubin:$PATH" >> "$GITHUB_ENV"
+
+      # ============================================================
+      # FIX LOGOS
+      # ============================================================
+
+      # Le commit 777925d de Logos ajoute le support des arguments
+      # multi-lignes dans %orig et provoque ici une génération
+      # incorrecte de :
+      #
+      #     [%orig mutableCopy]
+      #
+      # On revient donc au commit parent de 777925d.
+      - name: Pin compatible Logos version
+        run: |
+          echo "========================================"
+          echo "          PINNING LOGOS"
+          echo "========================================"
+
+          cd "$THEOS/vendor/logos"
+
+          echo "Current Logos commit:"
+          git rev-parse HEAD || true
+
+          echo ""
+          echo "Repository:"
+          git remote -v || true
+
+          echo ""
+          echo "Fetching Logos history..."
+
+          if [ "$(git rev-parse --is-shallow-repository 2>/dev/null || echo false)" = "true" ]; then
+            git fetch --unshallow
+          else
+            git fetch --all --tags
+          fi
+
+          echo ""
+          echo "Checking out parent of 777925d..."
+          git checkout 777925d^
+
+          echo ""
+          echo "Final Logos commit:"
+          git rev-parse HEAD
+          git log -1 --oneline
+
+          echo ""
+          echo "========================================"
+
+        env:
+          THEOS: ${{ github.workspace }}/theos
+
+      # ============================================================
+      # DIAGNOSTICS
+      # ============================================================
 
       - name: Diagnose Theos toolchain
         run: |
           echo "========================================"
           echo "           SYSTEM INFORMATION"
           echo "========================================"
+
           sw_vers || true
           uname -a || true
 
@@ -58,7 +133,9 @@ jobs:
           echo "========================================"
           echo "           THEOS INFORMATION"
           echo "========================================"
+
           echo "THEOS=$THEOS"
+
           git -C "$THEOS" rev-parse HEAD || true
           git -C "$THEOS" log -1 --oneline || true
           git -C "$THEOS" status --short || true
@@ -67,6 +144,7 @@ jobs:
           echo "========================================"
           echo "           LOGOS INFORMATION"
           echo "========================================"
+
           echo "Logos location:"
           find "$THEOS" -path "*/logos.pl" -type f -print || true
 
@@ -87,6 +165,7 @@ jobs:
           echo "========================================"
           echo "           COMPILER INFORMATION"
           echo "========================================"
+
           clang --version || true
           xcodebuild -version || true
 
@@ -94,6 +173,7 @@ jobs:
           echo "========================================"
           echo "           MAKE INFORMATION"
           echo "========================================"
+
           which make || true
           make --version || true
 
@@ -101,6 +181,7 @@ jobs:
           echo "========================================"
           echo "           THEOS TOOLCHAIN"
           echo "========================================"
+
           ls -la "$THEOS/bin" || true
           ls -la "$THEOS/vendor/logos/bin" || true
 
@@ -108,32 +189,58 @@ jobs:
           echo "========================================"
           echo "       SIDeloading.x ORIGINAL"
           echo "========================================"
+
           sed -n '90,110p' Sources/Sideloading.x || true
 
           echo ""
           echo "========================================"
           echo "       PREPROCESSED LOGOS OUTPUT"
           echo "========================================"
-          "$THEOS/bin/logos.pl" Sources/Sideloading.x > /tmp/Sideloading-logos.m || true
-          sed -n '90,120p' /tmp/Sideloading-logos.m || true
+
+          "$THEOS/bin/logos.pl" Sources/Sideloading.x \
+            > /tmp/Sideloading-logos.m || true
+
+          echo ""
+          echo "Relevant generated code:"
+          grep -n -A15 -B10 "NSMutableDictionary.*info" \
+            /tmp/Sideloading-logos.m || true
+
+          echo ""
+          echo "Generated file around infoDictionary:"
+          grep -n "infoDictionary" /tmp/Sideloading-logos.m || true
 
           echo ""
           echo "========================================"
           echo "              END DIAGNOSTIC"
           echo "========================================"
+
         env:
           THEOS: ${{ github.workspace }}/theos
-          
+
+      # ============================================================
+      # BUILD DEB
+      # ============================================================
+
       - name: Build .deb package
-        run: make package
+        run: |
+          make clean package
         env:
           THEOS: ${{ github.workspace }}/theos
+
+      # ============================================================
+      # UPLOAD DEB
+      # ============================================================
 
       - name: Upload .deb
         uses: actions/upload-artifact@v4
         with:
           name: kettu-tweak-deb
           path: KettuTweak/packages/*-arm64.deb
+          if-no-files-found: error
+
+  # ==============================================================
+  # BUILD IPA
+  # ==============================================================
 
   build-ipa:
     name: Inject tweak into Discord IPA
@@ -141,8 +248,17 @@ jobs:
     needs: build-tweak
 
     steps:
+
+      # ============================================================
+      # CHECKOUT
+      # ============================================================
+
       - name: Checkout monorepo
         uses: actions/checkout@v4
+
+      # ============================================================
+      # DOWNLOAD DEB
+      # ============================================================
 
       - name: Download tweak artifact
         uses: actions/download-artifact@v4
@@ -150,12 +266,31 @@ jobs:
           name: kettu-tweak-deb
           path: ./artifacts
 
+      # ============================================================
+      # DOWNLOAD DISCORD IPA
+      # ============================================================
+
       - name: Download Discord IPA
         run: |
           echo "Downloading Discord IPA from input URL..."
-          curl -fL --retry 3 --retry-delay 5 -o discord.ipa "${{ inputs.ipa_url }}"
+
+          curl -fL \
+            --retry 3 \
+            --retry-delay 5 \
+            -o discord.ipa \
+            "${{ inputs.ipa_url }}"
+
+          echo ""
+          echo "Downloaded IPA:"
           ls -lh discord.ipa
+
+          echo ""
+          echo "File information:"
           file discord.ipa
+
+      # ============================================================
+      # EXTRACT KETTU METADATA
+      # ============================================================
 
       - name: Extract metadata from KettuTweak/control
         id: meta
@@ -164,30 +299,90 @@ jobs:
           NAME=$(grep '^Name:' control | cut -d ' ' -f 2)
           PACKAGE=$(grep '^Package:' control | cut -d ' ' -f 2)
           VERSION=$(grep '^Version:' control | cut -d ' ' -f 2)
+
           DEB_FILE_NAME="${PACKAGE}_${VERSION}_iphoneos-arm64.deb"
-          echo "app_name=$NAME" >> $GITHUB_OUTPUT
-          echo "deb_file=$DEB_FILE_NAME" >> $GITHUB_OUTPUT
+
+          echo "Kettu name: $NAME"
+          echo "Package: $PACKAGE"
+          echo "Version: $VERSION"
+          echo "DEB: $DEB_FILE_NAME"
+
+          echo "app_name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "deb_file=$DEB_FILE_NAME" >> "$GITHUB_OUTPUT"
+
+      # ============================================================
+      # INSTALL CYAN / PYZULE
+      # ============================================================
 
       - name: Install cyan (pyzule-rw)
-        run: pip install --force-reinstall https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip Pillow
+        run: |
+          python3 -m pip install \
+            --force-reinstall \
+            https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip \
+            Pillow
+
+      # ============================================================
+      # INJECT TWEAK
+      # ============================================================
 
       - name: Inject tweak into Discord IPA
         run: |
           DEB_PATH=$(find ./artifacts -name "*.deb" | head -n 1)
-          echo "Using DEB: $DEB_PATH"
+
+          if [ -z "$DEB_PATH" ]; then
+            echo "ERROR: No .deb package found!"
+            exit 1
+          fi
+
+          echo "Using DEB:"
+          echo "$DEB_PATH"
+
+          echo ""
+          echo "Injecting KettuTweak into Discord IPA..."
+
           cyan -uwsgq \
             -i discord.ipa \
             -o "${{ steps.meta.outputs.app_name }}.ipa" \
             -f "$DEB_PATH"
+
+          echo ""
+          echo "Generated IPA:"
           ls -lh "${{ steps.meta.outputs.app_name }}.ipa"
+
+      # ============================================================
+      # GET DISCORD VERSION
+      # ============================================================
 
       - name: Get Discord version from IPA
         id: discord_ver
         run: |
-          unzip -q "${{ steps.meta.outputs.app_name }}.ipa" -d _ipa_inspect
-          DISCORD_VERSION=$(plutil -p _ipa_inspect/Payload/Discord.app/Info.plist | grep CFBundleShortVersionString | cut -d '"' -f 4)
-          echo "discord_version=$DISCORD_VERSION" >> $GITHUB_OUTPUT
           rm -rf _ipa_inspect
+
+          unzip -q \
+            "${{ steps.meta.outputs.app_name }}.ipa" \
+            -d _ipa_inspect
+
+          DISCORD_VERSION=$(
+            plutil -p \
+              _ipa_inspect/Payload/Discord.app/Info.plist |
+            grep CFBundleShortVersionString |
+            cut -d '"' -f 4
+          )
+
+          if [ -z "$DISCORD_VERSION" ]; then
+            echo "ERROR: Could not determine Discord version."
+            exit 1
+          fi
+
+          echo "Discord version: $DISCORD_VERSION"
+
+          echo "discord_version=$DISCORD_VERSION" >> "$GITHUB_OUTPUT"
+
+          rm -rf _ipa_inspect
+
+      # ============================================================
+      # UPLOAD FINAL IPA
+      # ============================================================
 
       - name: Upload final IPA
         uses: actions/upload-artifact@v4
@@ -195,6 +390,10 @@ jobs:
           name: ${{ steps.meta.outputs.app_name }}-discord-${{ steps.discord_ver.outputs.discord_version }}-ipa
           path: ${{ steps.meta.outputs.app_name }}.ipa
           if-no-files-found: error
+
+      # ============================================================
+      # OPTIONAL GITHUB RELEASE
+      # ============================================================
 
       - name: Create GitHub Release
         if: inputs.release == true
@@ -205,5 +404,6 @@ jobs:
           files: ${{ steps.meta.outputs.app_name }}.ipa
           generate_release_notes: true
           fail_on_unmatched_files: true
+
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
