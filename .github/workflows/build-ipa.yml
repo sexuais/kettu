@@ -46,6 +46,24 @@ jobs:
       - name: Set GNU Make path
         run: echo "PATH=$(brew --prefix make)/libexec/gnubin:$PATH" >> $GITHUB_ENV
 
+      - name: Diagnose Theos toolchain
+        run: |
+          echo "=== THEOS ==="
+          git -C "$THEOS" rev-parse HEAD || true
+          git -C "$THEOS" log -1 --oneline || true
+
+          echo "=== LOGOS ==="
+          which logos.pl || true
+          logos.pl --version || true
+
+          echo "=== CLANG ==="
+          clang --version
+
+          echo "=== MAKE ==="
+          make --version
+        env:
+          THEOS: ${{ github.workspace }}/theos
+
       - name: Build .deb package
         run: make package
         env:
