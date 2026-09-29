@@ -317,6 +317,7 @@ jobs:
       - name: Install cyan (pyzule-rw)
         run: |
           python3 -m pip install \
+            --break-system-packages \
             --force-reinstall \
             https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip \
             Pillow
