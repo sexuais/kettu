@@ -41,8 +41,6 @@ jobs:
       # THEOS CACHE
       # ============================================================
 
-      # v2 force un nouveau cache pour éviter de réutiliser
-      # le Theos contenant le Logos problématique.
       - name: Cache Theos
         id: cache-theos
         uses: actions/cache@v4
@@ -67,16 +65,25 @@ jobs:
           echo "PATH=$(brew --prefix make)/libexec/gnubin:$PATH" >> "$GITHUB_ENV"
 
       # ============================================================
+      # INSTALL Ldid
+      # ============================================================
+
+      - name: Install ldid
+        run: |
+          brew install ldid
+
+          echo ""
+          echo "ldid location:"
+          which ldid
+
+          echo ""
+          echo "ldid version:"
+          ldid -V || true
+
+      # ============================================================
       # FIX LOGOS
       # ============================================================
 
-      # Le commit 777925d de Logos ajoute le support des arguments
-      # multi-lignes dans %orig et provoque ici une génération
-      # incorrecte de :
-      #
-      #     [%orig mutableCopy]
-      #
-      # On revient donc au commit parent de 777925d.
       - name: Pin compatible Logos version
         run: |
           echo "========================================"
@@ -89,10 +96,6 @@ jobs:
           git rev-parse HEAD || true
 
           echo ""
-          echo "Repository:"
-          git remote -v || true
-
-          echo ""
           echo "Fetching Logos history..."
 
           if [ "$(git rev-parse --is-shallow-repository 2>/dev/null || echo false)" = "true" ]; then
@@ -103,6 +106,7 @@ jobs:
 
           echo ""
           echo "Checking out parent of 777925d..."
+
           git checkout 777925d^
 
           echo ""
@@ -179,6 +183,14 @@ jobs:
 
           echo ""
           echo "========================================"
+          echo "           LDID INFORMATION"
+          echo "========================================"
+
+          which ldid || true
+          ldid -V || true
+
+          echo ""
+          echo "========================================"
           echo "           THEOS TOOLCHAIN"
           echo "========================================"
 
@@ -200,14 +212,8 @@ jobs:
           "$THEOS/bin/logos.pl" Sources/Sideloading.x \
             > /tmp/Sideloading-logos.m || true
 
-          echo ""
-          echo "Relevant generated code:"
           grep -n -A15 -B10 "NSMutableDictionary.*info" \
             /tmp/Sideloading-logos.m || true
-
-          echo ""
-          echo "Generated file around infoDictionary:"
-          grep -n "infoDictionary" /tmp/Sideloading-logos.m || true
 
           echo ""
           echo "========================================"
