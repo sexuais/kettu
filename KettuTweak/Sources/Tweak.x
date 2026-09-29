@@ -7,6 +7,7 @@
 #import "Settings.h"
 #import "Themes.h"
 #import "Utils.h"
+#import "KettuRuntimeC.h"
 
 static NSURL         *source;
 static NSString      *bunnyPatchesBundlePath;
@@ -14,17 +15,47 @@ static NSURL         *pyoncordDirectory;
 static LoaderConfig  *loaderConfig;
 static NSTimeInterval shakeStartTime = 0;
 static BOOL           isShaking      = NO;
+static BOOL           kettuRuntimeLoaded = NO;
 id                    gBridge        = nil;
+
+/*
+ * Discord's newer iOS builds use React Native's New Architecture / RCTHost.
+ * The old RCTCxxBridge executeApplicationScript hook is retained below as a
+ * legacy fallback, but RCTHost is the primary path for recent Discord.
+ */
+
+%hook RCTHost
+
+- (void)instance:(id)instance didInitializeRuntime:(void *)runtime
+{
+    %orig;
+
+    if (kettuRuntimeLoaded)
+        return;
+
+    kettuRuntimeLoaded = YES;
+
+    BunnyLog(@"RCTHost runtime initialized; loading Kettu");
+
+    KettuLoadIntoRuntimePtr(runtime, bunnyPatchesBundlePath, pyoncordDirectory);
+}
+
+%end
 
 %hook RCTCxxBridge
 
 - (void)executeApplicationScript:(NSData *)script url:(NSURL *)url async:(BOOL)async
 {
-    if (![url.absoluteString containsString:@"main.jsbundle"])
+    /*
+     * Legacy Discord / Paper architecture fallback.
+     * New Discord builds should use RCTHost above.
+     */
+    if (kettuRuntimeLoaded || ![url.absoluteString containsString:@"main.jsbundle"])
     {
         return %orig;
     }
 
+    kettuRuntimeLoaded = YES;
     gBridge = self;
     BunnyLog(@"Stored bridge reference: %@", gBridge);
 
