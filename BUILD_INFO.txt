@@ -1,0 +1,6 @@
+Built on Tue Sep 29 09:06:23 UTC 2026
+Source commit: 5bcad933f1703a02c840c3204b1120af5443bd1f
+
+URLs:
+  Bundle:    https://raw.githubusercontent.com/sexuais/kettu/dist/kettu.js
+  Plugin repo: https://raw.githubusercontent.com/sexuais/kettu/dist/plugins/repo.json
