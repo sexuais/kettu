@@ -122,6 +122,19 @@ jobs:
           THEOS: ${{ github.workspace }}/theos
 
       # ============================================================
+      # FETCH JSI HEADERS
+      # ============================================================
+
+      - name: Fetch JSI headers
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/facebook/react-native.git /tmp/rn
+          git -C /tmp/rn sparse-checkout set packages/react-native/ReactCommon/jsi/jsi
+          rm -rf Headers/jsi
+          mkdir -p Headers
+          cp -r /tmp/rn/packages/react-native/ReactCommon/jsi/jsi Headers/jsi
+          ls Headers/jsi | head
+
+      # ============================================================
       # DIAGNOSTICS
       # ============================================================
 
