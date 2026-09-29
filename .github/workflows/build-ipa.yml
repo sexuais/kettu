@@ -52,9 +52,11 @@ jobs:
           git -C "$THEOS" rev-parse HEAD || true
           git -C "$THEOS" log -1 --oneline || true
 
-          echo "=== LOGOS ==="
-          which logos.pl || true
-          logos.pl --version || true
+          echo "=== LOGOS FILES ==="
+          find "$THEOS" -iname "logos.pl" -o -iname "logos" | head -30
+
+          echo "=== LOGOS VERSION ==="
+          "$THEOS/bin/logos.pl" --version || true
 
           echo "=== CLANG ==="
           clang --version
@@ -63,7 +65,6 @@ jobs:
           make --version
         env:
           THEOS: ${{ github.workspace }}/theos
-
       - name: Build .deb package
         run: make package
         env:
