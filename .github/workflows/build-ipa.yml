@@ -30,6 +30,7 @@ jobs:
         working-directory: ./KettuTweak
 
     steps:
+
       # ============================================================
       # CHECKOUT
       # ============================================================
@@ -65,7 +66,7 @@ jobs:
           echo "PATH=$(brew --prefix make)/libexec/gnubin:$PATH" >> "$GITHUB_ENV"
 
       # ============================================================
-      # INSTALL Ldid
+      # INSTALL LDID
       # ============================================================
 
       - name: Install ldid
@@ -212,6 +213,8 @@ jobs:
           "$THEOS/bin/logos.pl" Sources/Sideloading.x \
             > /tmp/Sideloading-logos.m || true
 
+          echo ""
+          echo "Relevant generated code:"
           grep -n -A15 -B10 "NSMutableDictionary.*info" \
             /tmp/Sideloading-logos.m || true
 
@@ -355,6 +358,67 @@ jobs:
           echo ""
           echo "Generated IPA:"
           ls -lh "${{ steps.meta.outputs.app_name }}.ipa"
+
+      # ============================================================
+      # VERIFY KETTU INJECTION
+      # ============================================================
+
+      - name: Verify Kettu injection
+        run: |
+          echo "========================================"
+          echo "       VERIFYING KETTU INJECTION"
+          echo "========================================"
+
+          rm -rf _verify_ipa
+
+          unzip -q \
+            "${{ steps.meta.outputs.app_name }}.ipa" \
+            -d _verify_ipa
+
+          echo ""
+          echo "KettuTweak.dylib:"
+          find _verify_ipa \
+            -name "KettuTweak.dylib" \
+            -print
+
+          echo ""
+          echo "All injected dylibs:"
+          find _verify_ipa \
+            -name "*.dylib" \
+            -print
+
+          echo ""
+          echo "Frameworks:"
+          find _verify_ipa \
+            -name "*.framework" \
+            -print
+
+          echo ""
+          echo "Discord executable:"
+          ls -lh \
+            _verify_ipa/Payload/Discord.app/Discord
+
+          echo ""
+          echo "========================================"
+
+          if find _verify_ipa \
+            -name "KettuTweak.dylib" |
+            grep -q "KettuTweak.dylib"; then
+
+            echo ""
+            echo "✅ KettuTweak.dylib IS INSIDE THE IPA"
+            echo ""
+
+          else
+
+            echo ""
+            echo "❌ KettuTweak.dylib NOT FOUND"
+            echo ""
+
+            exit 1
+          fi
+
+          rm -rf _verify_ipa
 
       # ============================================================
       # GET DISCORD VERSION
