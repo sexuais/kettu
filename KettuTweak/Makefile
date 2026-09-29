@@ -4,16 +4,16 @@ INSTALL_TARGET_PROCESSES = Discord
 THEOS_PACKAGE_SCHEME = rootless
 FINALPACKAGE = 1
 
-# this doesnt work on my machine, i guess fish is stupid with paths
 include $(THEOS)/makefiles/common.mk
-# include /home/cocobo1/theos/makefiles/common.mk
 
 TWEAK_NAME = KettuTweak
 BUNDLE_NAME = BunnyResources
 
-KettuTweak_FILES = $(wildcard Sources/*.x Sources/*.m Sources/**/*.x Sources/**/*.m)
+KettuTweak_FILES = $(wildcard Sources/*.x Sources/*.m Sources/*.mm Sources/**/*.x Sources/**/*.m Sources/**/*.mm)
 KettuTweak_CFLAGS = -fobjc-arc -DPACKAGE_VERSION='@"$(THEOS_PACKAGE_BASE_VERSION)"' -I$(THEOS_PROJECT_DIR)/Headers
+KettuTweak_CCFLAGS = -std=c++17 -Wno-c++11-narrowing -I$(THEOS_PROJECT_DIR)/Headers
 KettuTweak_FRAMEWORKS = Foundation UIKit CoreGraphics CoreText CoreFoundation UniformTypeIdentifiers
+KettuTweak_LDFLAGS = -undefined dynamic_lookup
 
 BunnyResources_INSTALL_PATH = "/Library/Application\ Support/"
 BunnyResources_RESOURCE_DIRS = Resources
