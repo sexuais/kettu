@@ -48,23 +48,82 @@ jobs:
 
       - name: Diagnose Theos toolchain
         run: |
-          echo "=== THEOS ==="
+          echo "========================================"
+          echo "           SYSTEM INFORMATION"
+          echo "========================================"
+          sw_vers || true
+          uname -a || true
+
+          echo ""
+          echo "========================================"
+          echo "           THEOS INFORMATION"
+          echo "========================================"
+          echo "THEOS=$THEOS"
           git -C "$THEOS" rev-parse HEAD || true
           git -C "$THEOS" log -1 --oneline || true
+          git -C "$THEOS" status --short || true
 
-          echo "=== LOGOS FILES ==="
-          find "$THEOS" -iname "logos.pl" -o -iname "logos" | head -30
+          echo ""
+          echo "========================================"
+          echo "           LOGOS INFORMATION"
+          echo "========================================"
+          echo "Logos location:"
+          find "$THEOS" -path "*/logos.pl" -type f -print || true
 
-          echo "=== LOGOS VERSION ==="
-          "$THEOS/bin/logos.pl" --version || true
+          echo ""
+          echo "Logos commit:"
+          git -C "$THEOS/vendor/logos" rev-parse HEAD || true
+          git -C "$THEOS/vendor/logos" log -1 --oneline || true
 
-          echo "=== CLANG ==="
-          clang --version
+          echo ""
+          echo "Logos help:"
+          "$THEOS/bin/logos.pl" --help | head -50 || true
 
-          echo "=== MAKE ==="
-          make --version
+          echo ""
+          echo "Logos Perl:"
+          perl -v | head -5 || true
+
+          echo ""
+          echo "========================================"
+          echo "           COMPILER INFORMATION"
+          echo "========================================"
+          clang --version || true
+          xcodebuild -version || true
+
+          echo ""
+          echo "========================================"
+          echo "           MAKE INFORMATION"
+          echo "========================================"
+          which make || true
+          make --version || true
+
+          echo ""
+          echo "========================================"
+          echo "           THEOS TOOLCHAIN"
+          echo "========================================"
+          ls -la "$THEOS/bin" || true
+          ls -la "$THEOS/vendor/logos/bin" || true
+
+          echo ""
+          echo "========================================"
+          echo "       SIDeloading.x ORIGINAL"
+          echo "========================================"
+          sed -n '90,110p' Sources/Sideloading.x || true
+
+          echo ""
+          echo "========================================"
+          echo "       PREPROCESSED LOGOS OUTPUT"
+          echo "========================================"
+          "$THEOS/bin/logos.pl" Sources/Sideloading.x > /tmp/Sideloading-logos.m || true
+          sed -n '90,120p' /tmp/Sideloading-logos.m || true
+
+          echo ""
+          echo "========================================"
+          echo "              END DIAGNOSTIC"
+          echo "========================================"
         env:
           THEOS: ${{ github.workspace }}/theos
+          
       - name: Build .deb package
         run: make package
         env:
